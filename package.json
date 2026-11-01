@@ -1,0 +1,24 @@
+{
+  "name": "lab4_web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dan4ik27022008/lab4_web.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Dan4ik27022008/lab4_web/issues"
+  },
+  "homepage": "https://github.com/Dan4ik27022008/lab4_web#readme",
+  "dependencies": {
+    "commander": "^15.0.0"
+  }
+}
