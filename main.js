@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import http from 'http';
 import fs from 'fs';
+import url from 'url';
 
 const program = new Command();
 
@@ -21,8 +22,26 @@ fs.access(options.input, fs.constants.F_OK, (err) => {
     process.exit(1);
   }
 
-  const server = http.createServer((req, res) => {
-    // Асинхронне читання файлу
+const server = http.createServer((req, res) => {
+    const parsedUrl = url.parse(req.url, true);
+    const query = parsedUrl.query;
+
+    // Перевірка маршруту
+    if (parsedUrl.pathname !== '/') {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Помилка: Маршрут не знайдено (404)');
+    }
+
+    // Перевірка параметра min_price
+    let minPrice = null;
+    if (query.min_price !== undefined) {
+      minPrice = Number(query.min_price);
+      if (isNaN(minPrice)) {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('Помилка: Параметр min_price має бути числом (400)');
+      }
+    }
+
     fs.readFile(options.input, 'utf-8', (readErr, data) => {
       if (readErr) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -34,12 +53,37 @@ fs.access(options.input, fs.constants.F_OK, (err) => {
         jsonData = JSON.parse(data);
       } catch (parseErr) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('Помилка сервера: Файл даних пошкоджено, це не валідний JSON (500)');
+        return res.end('Помилка сервера: Некоректний JSON (500)');
       }
 
-      // Тимчасово для перевірки
+      const showSymbol = query.symbol === 'true';
+
+      // Фільтрація та перетворення даних
+      let result = jsonData.filter(item => {
+        const itemPrice = Number(item.price);
+        if (minPrice !== null && (isNaN(itemPrice) || itemPrice <= minPrice)) {
+          return false;
+        }
+        return true;
+      }).map(item => {
+        const mappedObj = {
+          coin: item.coin_name || null,
+        };
+        
+        if (showSymbol) {
+          mappedObj.symbol = item.symbol || null;
+        }
+        
+        mappedObj.date = item.date || null;
+        mappedObj.price = Number(item.price) || null;
+
+        return mappedObj;
+      });
+
+      const responseJson = JSON.stringify(result, null, 2);
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ message: "Файл успішно прочитано", count: jsonData.length }));
+      res.end(responseJson);
     });
   });
 
