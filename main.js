@@ -22,69 +22,91 @@ fs.access(options.input, fs.constants.F_OK, (err) => {
     process.exit(1);
   }
 
-const server = http.createServer((req, res) => {
-    const parsedUrl = url.parse(req.url, true);
-    const query = parsedUrl.query;
+  const server = http.createServer((req, res) => {
+    try {
+        const parsedUrl = url.parse(req.url, true);
+        const query = parsedUrl.query;
 
-    // Перевірка маршруту
-    if (parsedUrl.pathname !== '/') {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('Помилка: Маршрут не знайдено (404)');
-    }
-
-    // Перевірка параметра min_price
-    let minPrice = null;
-    if (query.min_price !== undefined) {
-      minPrice = Number(query.min_price);
-      if (isNaN(minPrice)) {
-        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('Помилка: Параметр min_price має бути числом (400)');
-      }
-    }
-
-    fs.readFile(options.input, 'utf-8', (readErr, data) => {
-      if (readErr) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('Помилка сервера: Не вдалося прочитати файл даних (500)');
-      }
-
-      let jsonData;
-      try {
-        jsonData = JSON.parse(data);
-      } catch (parseErr) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('Помилка сервера: Некоректний JSON (500)');
-      }
-
-      const showSymbol = query.symbol === 'true';
-
-      // Фільтрація та перетворення даних
-      let result = jsonData.filter(item => {
-        const itemPrice = Number(item.price);
-        if (minPrice !== null && (isNaN(itemPrice) || itemPrice <= minPrice)) {
-          return false;
+        // Перевірка маршруту
+        if (parsedUrl.pathname !== '/') {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('Помилка: Маршрут не знайдено (404)');
         }
-        return true;
-      }).map(item => {
-        const mappedObj = {
-          coin: item.coin_name || null,
-        };
-        
-        if (showSymbol) {
-          mappedObj.symbol = item.symbol || null;
-        }
-        
-        mappedObj.date = item.date || null;
-        mappedObj.price = Number(item.price) || null;
 
-        return mappedObj;
+        // Перевірка параметра min_price
+        let minPrice = null;
+        if (query.min_price !== undefined) {
+        minPrice = Number(query.min_price);
+        if (isNaN(minPrice)) {
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Помилка: Параметр min_price має бути числом (400)');
+        }
+        }
+
+        fs.readFile(options.input, 'utf-8', (readErr, data) => {
+        if (readErr) {
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Помилка сервера: Не вдалося прочитати файл даних (500)');
+        }
+
+        let jsonData;
+        try {
+            jsonData = JSON.parse(data);
+        } catch (parseErr) {
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Помилка сервера: Некоректний JSON (500)');
+        }
+
+        const showSymbol = query.symbol === 'true';
+
+        // Фільтрація та перетворення даних
+        let result = jsonData.filter(item => {
+            const itemPrice = Number(item.price);
+            if (minPrice !== null && (isNaN(itemPrice) || itemPrice <= minPrice)) {
+            return false;
+            }
+            return true;
+        }).map(item => {
+            const mappedObj = {
+            coin: item.coin_name || null,
+            };
+            
+            if (showSymbol) {
+            mappedObj.symbol = item.symbol || null;
+            }
+            
+            mappedObj.date = item.date || null;
+            mappedObj.price = Number(item.price) || null;
+
+            return mappedObj;
+        });
+
+        const responseJson = JSON.stringify(result, null, 2);
+
+        // Якщо задана опція output, виконує асинхронний запис у файл
+        if (options.output) {
+            fs.writeFile(options.output, responseJson, 'utf-8', (writeErr) => {
+            if (writeErr) {
+                console.error('Помилка запису у файл:', writeErr.message);
+                // За вимогами: сервер продовжує роботу, але віддає помилку 500
+                res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                return res.end('Помилка сервера: Не вдалося зберегти файл результату (500)');
+            }
+            // Якщо записалося успішно — повертає результат
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(responseJson);
+            });
+        } else {
+            // Якщо опцію output не передано, просто повертає результат
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(responseJson);
+        }
       });
-
-      const responseJson = JSON.stringify(result, null, 2);
-
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(responseJson);
-    });
+    } catch (unexpectedErr) {
+      // Глобальний перехоплювач для запобігання падінню сервера
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Внутрішня помилка сервера (500)');
+    }
   });
 
   server.listen(options.port, options.host, () => {
